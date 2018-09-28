@@ -1,0 +1,405 @@
+---
+title: "Optimization in R Markdown"
+# subtitle: "possible subtitle goes here"
+author:
+  - Cosmin Borsa^[<cosmin.borsa@uconn.edu>; M.S. in Applied Financial Mathematics,
+    Department of Mathematics, University of Connecticut.]
+date: "`r format(Sys.time(), '%d %B %Y')`"
+documentclass: article
+papersize: letter
+fontsize: 11pt
+bibliography: template.bib
+biblio-style: asa
+keywords: Template, R Markdown, bookdown, Data Lab
+# keywords set in YAML header here only go to the properties of the PDF output
+# the keywords that appear in PDF output are set in latex/before_body.tex
+output:
+  bookdown::pdf_document2
+  bookdown::html_document2
+abstract: |
+    This document is a homework assignment for the course Statistical Computing at the University of Connecticut.  
+---
+
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+## some utility functions, see the source code for details
+source("utils_template.R")
+
+## specify the packages needed
+pkgs <- c("DT", "leaflet", "splines2", "webshot", "graphics", "elliptic")
+need.packages(pkgs)
+
+## external data can be read in by regular functions,
+## such as read.table or load
+
+## for latex and html output
+isHtml <- knitr::is_html_output()
+isLatex <- knitr::is_latex_output()
+latex <- ifelse(isLatex, '\\LaTeX\\', 'LaTeX')
+
+## specify global chunk options
+knitr::opts_chunk$set(fig.width = 5, fig.height = 4, dpi = 300,
+                      out.width = "90%", fig.align = "center")
+
+```
+
+# Local Maxima {#sec:maxima}
+
+In the first problem we were given a probability density function with parameter $\theta$ and a sample of size $n$ from that distribution. Using the density function $f(x; \theta)$ defined on the interval $(0,2\pi)$, and the sample, we have to compute the log-likelihood function $l(\theta)$. The probability density function is given in \@ref(eq:density).
+
+\begin{align}
+    f(x; \theta) = \frac{1 - cos(x - \theta)}{2\pi}, \qquad x \in (0, 2\pi), \,  \theta \in (-\pi, \pi) 
+    (\#eq:density)
+\end{align}
+
+Before we compute the log-likelihood function $l(\theta)$ we are going to compute the likelihood function $L(\theta)$.
+
+\begin{align}
+   L(\theta)  = f(x_1;\theta) \cdot f(x_2;\theta) \cdot \ldots \cdot f(x_n;\theta) = \prod_{i=1}^{n} \frac{1 - cos(x_i - \theta)}{2\pi} = \frac{1}{(2\pi)^n}\prod_{i=1}^{n} 1 - cos(x_i - \theta) \\ \\
+\end{align}
+
+We are now going to compute the log-likelihood function $l(\theta)$.
+
+\begin{align}
+   l(\theta) = \log(L(\theta)) = - n \log(2\pi)  + \sum_{i=1}^{n} \log(1 - cos(x_i - \theta)), \qquad  \theta \in (-\pi, \pi) \\ \\
+\end{align}
+
+Next, we will code the log-likelihood function $l(\theta)$ in R using the given sample.
+
+```{r loglikelihood, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+
+loglikelihood <- function(x){
+  loglikelihood <- 0
+  if (-pi <= x && x <= pi) {
+    loglikelihood <- -length(sample)*log(2*pi)
+    for (y in sample) {
+      loglikelihood <- loglikelihood + log(1 - cos(y - x))
+    }
+  }
+  return(loglikelihood)
+}
+```
+
+Next, we are going to graph the log-likelihood function $l(\theta)$ in the interval $(-\pi,\pi)$.
+
+(ref:cap-likelihoodfig) Log-Likelihood function of theta using the sample data
+
+```{r likelihoodfig, echo = FALSE, fig.cap = "(ref:cap-likelihoodfig)", fig.width = 8}
+
+curve(loglikelihood, -pi, pi, n = 1000, xlab = "Theta", ylab = "Log-Likelihood")
+```
+   
+   
+## Method-of-Moments Estimator
+
+In this section we will find the method-of-moments estimator of $\theta$. However, before we do that, we need to compute the expectation of a random variable $X$ with a given $\theta$ under the probability density function $f(x; \theta)$. Thus, 
+
+\begin{align}
+E(X|\theta) &= \int_{0}^{2\pi} x \cdot \Big( \frac{1 - \cos(x - \theta)}{2\pi} \Big) dx \\ \\ 
+E(X|\theta) &= \frac{1}{2\pi}\cdot\int_{0}^{2\pi} x dx  -  \frac{1}{2\pi}\cdot\int_{0}^{2\pi} x \cos(x-\theta)dx \\ \\
+E(X|\theta) &= \frac{1}{2\pi}\cdot\Big( \frac{x^2}{2} \Big|_{0}^{2\pi} \Big) - 
+                \frac{1}{2\pi}\cdot\Big[ x \sin(x - \theta) \Big|_{0}^{2\pi} - \int_{0}^{2\pi} \sin(x - \theta) dx \Big] \\ \\
+E(X|\theta) &= \frac{1}{2\pi}\cdot\frac{4\pi^2}{2} - \frac{1}{2\pi}\cdot\Big[ 2\pi\cdot \sin(2\pi - \theta) + \cos(2\pi - \theta) - \cos(-\theta) \Big] \\ \\ 
+E(X|\theta) &= \pi + \sin(\theta) \\ \\ 
+\end{align} 
+
+To compute the method-of-moments estimator $\hat\theta_{MM}$, we need to set the expectation of a random variable $X$ with the the probability density function $f(x; \theta)$ to be equal to the sample mean $\bar{X_n}$. \@ref(eq:moment)
+
+\begin{align}
+E(X|\hat\theta_{MM}) &= \bar{X_n}
+  (\#eq:moment) \\ \\
+\end{align} 
+
+By solving the equation \@ref(eq:moment) for $\hat\theta_{MM}$ we will obtain the method-of-moments estimator in \@ref(eq:thetamoment). 
+
+\begin{align}
+E(X|\hat\theta_{MM}) = \pi + \sin(\hat\theta_{MM}) \\ \\
+\end{align} 
+
+\begin{align}
+\pi + \sin(\hat\theta_{MM}) = \bar{X_n} \\ \\
+\end{align} 
+
+\begin{align}
+\sin(\hat\theta_{MM}) = \bar{X_n} - \pi \\ \\
+\end{align} 
+
+\begin{align}
+\hat\theta_{MM} = \arcsin(\bar{X_n} - \pi)
+    (\#eq:thetamoment) \\ \\ 
+\end{align} 
+
+There are two solutions for the method-of-moments estimator $\hat\theta_{MM}$. The first solution is $\hat\theta_{MM_1} \approx 0.09539407$ and the second solution is $\hat\theta_{MM_2} = \pi - \hat\theta_{MM_1} \approx 3.046199$. 
+
+## Maximum likelihood Estimation
+
+In this section we will find the maximum likelihood estimator of $\theta$ using the Newton Raphson method. The initial points of the estimation will be given by the method-of-moments estimator $\hat\theta_{MM}$ from the previous section. However, before we proceed with the Newton Raphson method, we have to compute the first and the second derivative of the log-likelihood function $l(\theta)$ with respect to $\theta$ in \@ref(eq:score2) and \@ref(eq:observedinf2)
+
+\begin{align}
+  \frac{\partial l(\theta)}{\partial \theta} &= \sum_{i = 1}^{n} \frac{\sin(\theta - x_i)}{1 - \cos(x_i - \theta)}
+  (\#eq:score2) \\ \\ 
+  \frac{\partial^2 l(\theta)}{\partial \theta^2} &= - \sum_{i = 1}^{n} \frac{1}{1 - \cos(x_i - \theta)}
+  (\#eq:observedinf2)
+\end{align}
+
+Next, we will implement the score function which is the first derivative of the log-likelihood function.
+
+```{r score, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+score  <- function(x){
+  score <- 0
+  for (y in sample) {
+    score <- score + sin(x - y)/(1 - cos(y - x)) 
+  }
+  return(score)
+}
+```
+
+We will also implement the derivative of the score function with respect to the parameter $\theta$.
+
+```{r dscore, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+
+dscore <- function(x) {
+  dscore <- 0
+  for (y in sample) {
+    dscore <- dscore - 1/(1 - cos(y - x))
+  }
+  return(dscore)
+}
+```
+
+We will now implement the Newton Raphson method.
+
+```{r Newton, echo = TRUE, message = FALSE, warning = FALSE}
+NewtonRaphson <- function (x, eps = 1e-6, itmax = 1000, verbose = TRUE){
+  i <- 1
+  oldguess <- x
+  while(i <= itmax){
+    newguess <- oldguess - (score(oldguess)/dscore(oldguess))
+    if (abs(newguess - oldguess) < eps) break
+    i <- i + 1
+    oldguess <-  newguess
+  }
+  if (i < itmax + 1){
+    return(newguess)  
+  }
+  else{
+    return("No Convergence")
+  }
+}
+```
+
+Lastly, we will find the maximum likelihood estimator for $\theta$ using the initial points $\hat\theta_{MM_1}$ and $\hat\theta_{MM_2}$.
+
+```{r NewtonValues, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+MM1 <- asin(mean(sample) - pi)
+MM2 <- pi - asin(mean(sample) - pi)
+Newton1 <- NewtonRaphson(MM1, eps = 1e-6, itmax = 1000, verbose = TRUE)
+Newton2 <- NewtonRaphson(MM2, eps = 1e-6, itmax = 1000, verbose = TRUE)
+Newton1
+Newton2
+```
+
+After using the initial points $\hat\theta_{MM_1}$ and $\hat\theta_{MM_2}$ we obtain two local maximum likelihood estimates: $0.003118157$ and $3.170715$.
+
+We will now run the the newton raphson algorithm with the initial points $-2.7$ and $2.7$.
+
+```{r NewtonValues2, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+Newton3 <- NewtonRaphson(-2.7, eps = 1e-6, itmax = 1000, verbose = TRUE)
+Newton4 <- NewtonRaphson(2.7, eps = 1e-6, itmax = 1000, verbose = TRUE)
+Newton3
+Newton4
+```
+
+The algorithm finds two local maxima. When we start with the initial value $-2.7$, the algorithm converges to $-2.668857$. However, when the inital value is $2.7$, the newton raphson algorithm goes to $2.848415$. These resiults come in line with our mental expectations, since the log-likelihood function has many local maxima. Thus, the initial point is crucial in obtaining a local maximum.
+
+## Clustering
+
+In this section we will repeat the maximum likelihood estimation for $\theta$ using $200$ equally spaced starting values in the interval $(-\pi, \pi)$. The distribution has many maxima; therefore, we will partition the values into clusters so that each cluster corresponds to a unique outcome of the optimization. We observe that there are 18 outcomes. 
+
+```{r clustering, echo = TRUE, message = FALSE, warning = FALSE}
+clustering <- data.frame(initialpoints = seq(-pi, pi, length.out = 200))
+for (i in 1:nrow(clustering)) {
+  NewtonCluster = NewtonRaphson(clustering[i,1], eps = 1e-6, itmax = 1000, verbose = TRUE)
+  if (NewtonCluster == "No Convergence") {
+    clustering[i, 2] = "No Convergence"
+  }
+  else {
+    clustering[i, 2] = NewtonCluster
+  }
+}
+```
+
+In the table \@ref(tab:cluster) we display the 18 outcomes for $\theta$. Morover, we show the range of values of the initial points that return those outcomes. The numbers that lie between the values of the columns $\textit{Minimum Initial Point}$ and $\textit{Maximum Initial Point}$ provide the bounds for the interval of initial points that returns the specified outcome.
+
+(ref:cap-cluster) Clustering of Initial Points using 18 unique outcomes
+
+```{r cluster, echo = TRUE, message = FALSE, warning = FALSE}
+uniqueoutputs <- unique(strtrim(clustering[,2],9))
+finalcluster <- data.frame(uniqueoutputs)
+
+for ( i in 1:length(uniqueoutputs)) {
+    indices <- which(strtrim(clustering[,2], 9) == uniqueoutputs[i])
+    inputsgroup <- clustering[indices,1]
+    finalcluster[i,2] = min(inputsgroup)
+    finalcluster[i,3] = max(inputsgroup)
+  eval(parse(text = paste0("group",i," <- cbind(inputsgroup, rep(uniqueoutputs[",i,"], length(inputsgroup)))")))
+}
+
+colnames(finalcluster) <- c("Outcome", "Minimum Initial Point", "Maximum Initial  Point")
+
+knitr::kable(finalcluster, booktabs = TRUE, caption = "(ref:cap-cluster)" )
+```
+
+From the table \@ref(tab:cluster) we can see that there are 18 groups with different local maxima. These results come in line with the likelihood function graphed in Figure \@ref(fig:likelihoodfig). To get the global maximum, which is close to 0, we should use initial points which are roughly inside the interval $(-0.8, 0.5)$.
+
+# Population Growth Model  {#sec:population}
+
+In this section we are going to model the population growth of beetles. The population growth is modeled using the differential equation \@ref(eq:logdifeq)
+
+\begin{align}
+  \frac{dN}{dt} =  rN \Big(1 - \frac{N}{K} \Big) 
+  (\#eq:logdifeq) \\ \\
+\end{align}
+
+where $N$ is the population size, $t$ is the time, $r$ is the growth rate parameter, and $K$ is the parameter that represents the population carrying capacity of the environment. The solution of the differential equation is given in \@ref(eq:difeqsol).
+
+\begin{align}
+  N_t = f(t) = \frac{KN_{0}}{N_0 + (K - N_0)\exp(-rt)} 
+  (\#eq:difeqsol) \\
+\end{align}
+
+$N_t$ denotes the population size at time $t$.
+
+## Fitting the Population Growth Model
+
+We will now fit the population growth model to the beetles data. To minimize the sum of squared errors between the model predictions and the observed counts, we will use the Gauss-Newton approach. However, before we do that, we would like to obtain a forumla for the growth rate parameter $r$. \@ref(eq:growth3)
+
+\begin{align}
+  N_t = \frac{KN_{0}}{N_0 + (K - N_0)\exp(-rt)} \\  \\
+\end{align}
+
+\begin{align}
+  N_0 + (K - N_0)\exp(-rt) = \frac{KN_0}{N_t} \\ \\
+\end{align}
+
+\begin{align}
+  (K - N_0)\exp(-rt) = \frac{N_0 (K - N_t)}{N_t} \\ \\
+\end{align}
+
+\begin{align}
+  \exp(-rt) = \frac{N_0 (K - N_t)}{N_t (K - N_0)} \\ \\
+\end{align}
+
+\begin{align}
+  rt = \log\Big(\frac{N_t (K - N_0)}{N_0 (K - N_t)} \Big) \\ \\
+\end{align}
+
+\begin{align}
+  r = \frac{1}{t} \log\Big(\frac{N_t (K - N_0)}{N_0 (K - N_t)} \Big)
+ (\#eq:growth3) \\ \\
+\end{align}
+
+To apply the Gauss Newton approach, we will use the $nls$ function to determine the nonlinear least-squares estimates of the parameters of the model. For the estimation, the initial point $K_0 = 1,500$ was choosen for $K$, and $r_0$ was computed from the mean of the observed growth rates. The values of the observed growth rates $r$ were obtained using the equation \@ref(eq:growth3) and the given beetle data.
+
+```{r GaussNewton, echo = TRUE, message = FALSE, warning = FALSE}
+beetles <- data.frame(
+  days = c(0, 8, 28, 41, 63, 69, 97, 117, 135, 154),
+  beetles = c(2, 47, 192, 256, 768, 896, 1120, 896, 1184, 1024))
+
+K0 = 1500
+r0_v <- log(beetles$beetles*(K0 -2)/(K0 - beetles$beetles)*2)/beetles$days
+r0 = mean(r0_v[2:10])
+
+pmodel <- nls(beetles ~ K*2/(2 + (K - 2)*exp(-r*days)), start = list(K = K0, r = r0), data = beetles, trace = TRUE )
+```
+
+We can see that the population carrying capacity $K$ converges to $1049.4068372$ while the growth rate parameter $r$  goes to $0.1182685$.
+
+Next, we will plot the contour of the sum of squared errors (SSE). However, before we do that, we would like to code the sum of squared errors.
+
+```{r SSE, echo = TRUE, message = FALSE, warning = FALSE}
+SSE <- function(K, r) {
+  estbeetles <-  K*2/(2 + (K - 2)*exp(-r*beetles$days)) 
+  diffbeetles <- estbeetles - beetles$beetles
+  SSE <- t(diffbeetles)%*%diffbeetles 
+  return(SSE)
+}
+
+K_v = seq(500, 1500, length.out = 200)
+r_v = seq(0.1, 0.2, length.out = 200)
+SSEmatr <- matrix(nrow = length(K_v), ncol = length(r_v))
+
+for (i in 1:length(K_v)) {
+  for (j in 1:length(r_v)) {
+    SSEmatr[i,j] = SSE(K_v[i],r_v[j])
+  }
+}
+```
+
+The contour plots are displayed in Figure \@ref(fig:contour)
+
+(ref:cap-contour) Contour Plot of the Sum of Squared Errors of the Logistic Model.
+
+```{r contour, echo = FALSE, fig.cap = "(ref:cap-contour)", fig.width = 10}
+contour(x = K_v, y = r_v, z = SSEmatr, xlab = "Population Carrying Capacity - K", ylab = "Growth Rate - r", plot.title = title("Contour Plot of the Sum of Squared Errors"))
+```
+
+The minimum of the sum of squared errors of the logistic model is approximately $200,000$. This value is attained when the population carrying capacity $K$ is roughly between $850$ and $1250$, and the growth rate $r$ takes values in the interval $(0.10, 0.15)$.
+
+## Log-Normal Distribution
+
+In this section we will assume that $\log N_t$ is independent and normally distributed with mean $\log f(t)$ and variance $\sigma^2$. We will find the maximum likelihood estimator of $\theta = (r, K, \sigma^2)$ using $K_0 = 1,500$, and we will compute $r_0$ from the mean of the observed growth rates.
+
+```{r loglikelimax3, echo = TRUE, warning= FALSE, message= FALSE }
+beetles <- data.frame(
+  days = c(0, 8, 28, 41, 63, 69, 97, 117, 135, 154),
+  beetles = c(2, 47, 192, 256, 768, 896, 1120, 896, 1184, 1024))
+
+aloglikelihood <- function(theta) {
+  K = theta[1]
+  r = theta[2]
+  sigma = theta[3]
+  t <- beetles$days
+  N <- beetles$beetles
+  mu = log((2*K)/(2 + (K - 2)*exp(-r*t)))
+  aloglikelihood <- -sum(dnorm(log(N), mu, sigma, log =TRUE))
+return(aloglikelihood)
+}
+
+thetainitial = numeric(3)
+thetainitial[1] <- 1500
+r0_v <- log(beetles$beetles*(K0 - 2)/(K0 - beetles$beetles)*2)/beetles$days
+r0 = mean(r0_v[2:10])
+thetainitial[2] <- r0
+thetainitial[3] <- sqrt(var(log(beetles$beetles)))
+
+mle <- nlm(aloglikelihood, thetainitial, hessian = TRUE)
+mle$estimate
+
+hessianmatr <- mle$hessian
+hessianmatr
+
+estvariance <- solve(hessianmatr)
+estvariance
+```
+
+The maximum likelihood estimates for the population carrying capacity $K$, the growth rate $r$, and the standard deviation $\sigma$ are $820.3811453$, $0.1926394$, and $0.6440837$. The values that we have obtained for $K$ and $r$ differ from the values that we got in our previous estimates since we have taken the variance into consideration. The variance of the estimators can be obtained from the hessian matrix. Thus, we get $6.262775e+04$ for variance of the population carrying capacity $K$, $4.006728e-03$ for the variance of the growth rate $r$, and lastly, $2.075825e-02$ for the variance of the standard deviation $\sigma$.
+
+# Reference {-}
+
+[pandoc]: http://pandoc.org/
+[pandocManual]: http://pandoc.org/MANUAL.html
+[repo]: https://github.com/wenjie2wang/datalab-templates
+[taskView]: https://cran.r-project.org/web/views/ReproducibleResearch.html
+[shiny.io]: https://www.shinyapps.io/
+[wenjie-stat.shinyapps]: https://wwenjie-stat.shinyapps.io/minisplines2
